@@ -171,8 +171,8 @@ class Manager:
         # build footer with usage and token info
         tokens = self.token_counter.count_conversation_tokens(conversation)
 
-        # remove large amounts of raw data to reduce token usage
-        conversation = [item for item in conversation if "type" not in item or item["type"] != "data"]
+        # remove large amounts of raw data to reduce token usage (mutate in place)
+        conversation[:] = [item for item in conversation if "type" not in item or item.get("type") != "data"]
         
         usage_info = ""
         if hasattr(self.agent, 'last_usage') and hasattr(self.agent, 'last_limit'):
