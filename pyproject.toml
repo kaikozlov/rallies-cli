@@ -17,11 +17,13 @@ classifiers = [
 ]
 dependencies = [
     "rich",
-    "inquirer", 
+    "inquirer",
     "tiktoken",
     "requests",
     "openai",
-    "numpy"
+    "numpy",
+    "pytest>=8.3.5",
+    "pip>=25.0.1",
 ]
 
 [project.scripts]

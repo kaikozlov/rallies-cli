@@ -97,9 +97,14 @@ That's it! You're ready to start researching.
 
 ## 🔑 API Keys & Authentication
 
-### OpenAI API Key (Required)
+### OpenAI API Key (Required for OpenAI provider)
 ```bash
 export OPENAI_API_KEY="sk-your-openai-key"
+```
+
+### OpenRouter API Key (Required for OpenRouter provider)
+```bash
+export OPENROUTER_API_KEY="your-openrouter-key"
 ```
 
 ### Rallies.ai API Key (Optional - Higher usage limits)
@@ -111,21 +116,26 @@ rallies
 
 The Rallies.ai API key provides you higher rate limits. You can get your key by registering for a free account at [Rallies](https://rallies.ai)
 
+By default, rallies-cli uses the OpenAI provider. To use OpenRouter instead, you can specify it when initializing the LLM class in your code.
+
 ## 📋 Requirements
 
 - **Python 3.8+**
-- **OpenAI API Key** (required)
+- **OpenAI API Key** (required for OpenAI provider)
+- **OpenRouter API Key** (required for OpenRouter provider)
 - **Terminal with color support** (recommended)
 - **Internet connection** for real-time data
 
 ### Dependencies
 
-- `openai` - GPT-4 integration
+- `openai` - GPT-4 integration (works with both OpenAI and OpenRouter)
 - `rich` - Terminal formatting and colors  
 - `requests` - HTTP requests for data APIs
 - `inquirer` - Interactive prompts
 - `tiktoken` - Token counting and management
 - `numpy` - Numerical computations
+
+For detailed usage examples with OpenRouter, see [OpenRouter Usage Example](docs/openrouter_example.md).
 
 ## 🐛 Troubleshooting
 

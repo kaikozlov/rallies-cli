@@ -22,27 +22,36 @@ def retry_json_decode(max_retries=3):
     return decorator
 
 class LLM:
-    def __init__(self):
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    def __init__(self, provider="openai"):
+        self.provider = provider.lower()
+        
+        if self.provider == "openai":
+            self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        elif self.provider == "openrouter":
+            self.client = OpenAI(
+                api_key=os.getenv("OPENROUTER_API_KEY"),
+                base_url="https://openrouter.ai/api/v1"
+            )
+        else:
+            raise ValueError(f"Unsupported provider: {provider}")
 
     @retry_json_decode()
     def prompt(self, messages, model = "gpt-4.1", requires_json = False):
-        response = self.client.responses.create(
+        response = self.client.chat.completions.create(
             model=model,
-            input=messages
+            messages=messages
         )
-        response = response.output_text
+        response = response.choices[0].message.content
         if requires_json:
             response = json.loads(response)
         return response
     
     def prompt_stream(self, messages, model = "gpt-4.1"):
-        response = self.client.responses.create(
+        response = self.client.chat.completions.create(
             model=model,
-            input=messages,
+            messages=messages,
             stream=True
         )
-        for event in response:
-            # Listen for text delta events to get streaming content
-            if event.type == "response.output_text.delta":
-                yield event.delta
+        for chunk in response:
+            if chunk.choices[0].delta.content is not None:
+                yield chunk.choices[0].delta.content
