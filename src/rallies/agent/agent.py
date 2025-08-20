@@ -1,5 +1,4 @@
 import os
-import numpy as np
 import subprocess
 import tempfile
 import requests
@@ -24,31 +23,45 @@ class Agent:
                  })
          return parsed_messages
 
-    def run(self, messages: str) -> str:
+    def run(self, messages: list) -> list:
         message = []
         message.append({"role": "developer", "content": agent_prompt})
         message.extend(self.parse_messages(messages))
-        # Constrain output to a list of {title, description}
+        # Constrain output to an object with 'tasks' array of {title, description}
         plan_schema = {
             "type": "json_schema",
             "json_schema": {
                 "name": "plan_schema",
                 "schema": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "title": {"type": "string"},
-                            "description": {"type": "string"}
-                        },
-                        "required": ["title", "description"],
-                        "additionalProperties": False
-                    }
+                    "type": "object",
+                    "properties": {
+                        "tasks": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "title": {"type": "string"},
+                                    "description": {"type": "string"}
+                                },
+                                "required": ["title", "description"],
+                                "additionalProperties": False
+                            }
+                        }
+                    },
+                    "required": ["tasks"],
+                    "additionalProperties": False
                 }
             }
         }
-        response = LLM().prompt(message, requires_json=True, response_format=plan_schema, model=get_default_model())
-        return response
+        llm = LLM()
+        response_obj = llm.prompt(message, requires_json=True, response_format=plan_schema, model=get_default_model())
+        if isinstance(response_obj, dict) and isinstance(response_obj.get("tasks"), list):
+            return response_obj["tasks"]
+        elif isinstance(response_obj, list):
+            # Backward compatibility if the model returns a bare array
+            return response_obj
+        else:
+            return []
     
     def action(self, question, title, description):
         try:

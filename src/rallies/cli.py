@@ -1,10 +1,11 @@
 import sys
 import argparse
 import os
+import json
 from rich.text import Text
 from rallies.manager import Manager
 from rallies import console
-from rallies.helpers import handle_setup_command, get_openai_api_key
+from rallies.helpers import handle_setup_command, get_openai_api_key, get_openrouter_api_key
 
 def display_application_banner():
     banner_text = """
@@ -49,12 +50,12 @@ def interactive_shell(no_banner: bool = False):
         console.print("[white]2. Be specific for the best results.[/white]")
         console.print("[white]3. Type /help for more information.[/white]\n")
     
-    # Setup guidance if no OpenAI key
-    if not get_openai_api_key():
-        console.print("[yellow]OpenAI API key not found. Launching setup...[/yellow]")
+    # Setup guidance if no API key (OpenAI or OpenRouter)
+    if not get_openai_api_key() and not get_openrouter_api_key():
+        console.print("[yellow]No API key found (OpenAI or OpenRouter). Launching setup...[/yellow]")
         handle_setup_command(console)
-        if not get_openai_api_key():
-            console.print("[red]OpenAI API key is required to proceed.[/red]")
+        if not get_openai_api_key() and not get_openrouter_api_key():
+            console.print("[red]An API key is required to proceed. Please set either OPENAI_API_KEY or OPENROUTER_API_KEY.[/red]")
             sys.exit(1)
 
     selected_agent = Manager()
@@ -101,19 +102,19 @@ def main():
         if query.strip() == "-":
             query = sys.stdin.read()
 
-        # Ensure key setup in one-shot
-        if not get_openai_api_key():
-            console.print("[yellow]OpenAI API key not found. Launching setup...[/yellow]")
+        # Ensure key setup in one-shot (OpenAI or OpenRouter)
+        if not get_openai_api_key() and not get_openrouter_api_key():
+            console.print("[yellow]No API key found (OpenAI or OpenRouter). Launching setup...[/yellow]")
             handle_setup_command(console)
-            if not get_openai_api_key():
-                console.print("[red]OpenAI API key is required to proceed.[/red]")
+            if not get_openai_api_key() and not get_openrouter_api_key():
+                console.print("[red]An API key is required to proceed. Please set either OPENAI_API_KEY or OPENROUTER_API_KEY.[/red]")
                 sys.exit(1)
 
         manager = Manager()
         conversation = [{"role": "user", "content": query}]
         if args.plan_only:
             plan = manager.agent.run(conversation)
-            console.print(str(plan))
+            console.print(json.dumps(plan, indent=2))
             return
         result = manager.process_prompt(query, conversation)
         # Print final answer to stdout (already streamed to panel)

@@ -85,6 +85,7 @@ def show_help(console):
     console.print("  [white]/setup[/white]              Run first-time setup wizard for API keys")
     console.print("  [white]/key API_KEY[/white]         Set your Rallies API key (backward compatible)")
     console.print("  [white]/key openai API_KEY[/white]  Set your OpenAI API key")
+    console.print("  [white]/key openrouter API_KEY[/white] Set your OpenRouter API key")
     console.print("  [white]/key rallies API_KEY[/white] Set your Rallies API key")
     console.print("  [white]/feed[/white]               Show recent high-scoring questions from the community")
     console.print("  [white]/clear[/white]              Clear conversation history and free up context")
@@ -202,6 +203,24 @@ def set_openai_api_key(api_key: str) -> bool:
         os.environ["OPENAI_API_KEY"] = api_key
     return saved
 
+def get_openrouter_api_key() -> str:
+    """Resolve OpenRouter API key from env or config."""
+    # Environment variable takes precedence
+    env_key = os.getenv("OPENROUTER_API_KEY")
+    if env_key:
+        return env_key
+    config = load_config()
+    return config.get("openrouter_api_key")
+
+def set_openrouter_api_key(api_key: str) -> bool:
+    """Persist OpenRouter API key in config."""
+    config = load_config()
+    config["openrouter_api_key"] = api_key
+    saved = save_config(config)
+    if saved:
+        # Make available in current process
+        os.environ["OPENROUTER_API_KEY"] = api_key
+    return saved
 
 # Backward-compatible functions
 def get_api_key():
@@ -218,10 +237,11 @@ def handle_key_command(prompt, agent, console):
       /key API_KEY                 -> sets Rallies API key (backward compatible)
       /key rallies API_KEY         -> sets Rallies API key
       /key openai API_KEY          -> sets OpenAI API key
+      /key openrouter API_KEY      -> sets OpenRouter API key
     """
     parts = prompt.strip().split()
     if len(parts) < 2:
-        console.print("[red]Usage: /key [openai|rallies] API_KEY[/red]")
+        console.print("[red]Usage: /key [openai|openrouter|rallies] API_KEY[/red]")
         return True
 
     if len(parts) == 2:
@@ -237,7 +257,7 @@ def handle_key_command(prompt, agent, console):
     provider = parts[1].lower()
     api_key = parts[2] if len(parts) > 2 else None
     if not api_key:
-        console.print("[red]Usage: /key [openai|rallies] API_KEY[/red]")
+        console.print("[red]Usage: /key [openai|openrouter|rallies] API_KEY[/red]")
         return True
 
     if provider == "openai":
@@ -245,6 +265,11 @@ def handle_key_command(prompt, agent, console):
             console.print("[green]OpenAI API key saved and activated for this session.[/green]")
         else:
             console.print("[red]Failed to save OpenAI API key.[/red]")
+    elif provider == "openrouter":
+        if set_openrouter_api_key(api_key):
+            console.print("[green]OpenRouter API key saved and activated for this session.[/green]")
+        else:
+            console.print("[red]Failed to save OpenRouter API key.[/red]")
     elif provider == "rallies":
         if set_rallies_api_key(api_key):
             agent.api_key = api_key
@@ -252,7 +277,7 @@ def handle_key_command(prompt, agent, console):
         else:
             console.print("[red]Failed to save Rallies API key.[/red]")
     else:
-        console.print("[red]Unknown provider. Use 'openai' or 'rallies'.[/red]")
+        console.print("[red]Unknown provider. Use 'openai', 'openrouter', or 'rallies'.[/red]")
     return True
 
 
@@ -272,6 +297,18 @@ def handle_setup_command(console):
                     console.print("[green]✓ OpenAI key saved.[/green]")
                 else:
                     console.print("[red]Failed to save OpenAI key.[/red]")
+
+        # OpenRouter key (optional)
+        existing_openrouter = get_openrouter_api_key()
+        if existing_openrouter:
+            console.print("[dim]OpenRouter key already configured (optional).[/dim]")
+        else:
+            openrouter_key = getpass("OpenRouter API key (optional): ")
+            if openrouter_key.strip():
+                if set_openrouter_api_key(openrouter_key.strip()):
+                    console.print("[green]✓ OpenRouter key saved.[/green]")
+                else:
+                    console.print("[red]Failed to save OpenRouter key.[/red]")
 
         # Rallies key (optional)
         existing_rallies = get_rallies_api_key()

@@ -68,9 +68,9 @@ class Manager:
         if handle_command(prompt, conversation, self.agent, console):
             return ""
         
-        if not os.getenv("OPENAI_API_KEY"):
-            console.print("[red]⚠ We need to set our OpenAI key first. Please set OPENAI_API_KEY environment variable with your OpenAI key.[/red]")
-            console.print("[dim white]e.g export OPENAI_API_KEY=sk-... - once done open rallies again[/dim white]")
+        if not os.getenv("OPENAI_API_KEY") and not os.getenv("OPENROUTER_API_KEY"):
+            console.print("[red]⚠ An API key is required. Please set either OPENAI_API_KEY or OPENROUTER_API_KEY.[/red]")
+            console.print("[dim white]e.g. export OPENAI_API_KEY=sk-...  or  export OPENROUTER_API_KEY=or-...  then reopen rallies[/dim white]")
             console.print()
             exit()
 
