@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 import requests
 from .prompts import agent_prompt, answer_prompt, summary_prompt, compact_prompt
-from ..llm import LLM
+from ..llm import LLM, get_default_model
 
 
 class Agent:
@@ -28,7 +28,26 @@ class Agent:
         message = []
         message.append({"role": "developer", "content": agent_prompt})
         message.extend(self.parse_messages(messages))
-        response = LLM().prompt(message, requires_json = True)
+        # Constrain output to a list of {title, description}
+        plan_schema = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "plan_schema",
+                "schema": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "title": {"type": "string"},
+                            "description": {"type": "string"}
+                        },
+                        "required": ["title", "description"],
+                        "additionalProperties": False
+                    }
+                }
+            }
+        }
+        response = LLM().prompt(message, requires_json=True, response_format=plan_schema, model=get_default_model())
         return response
     
     def action(self, question, title, description):
@@ -78,7 +97,7 @@ class Agent:
         message = []
         message.append({"role": "developer", "content": summary_prompt})
         message.extend(self.parse_messages(messages))
-        summary = LLM().prompt(message)
+        summary = LLM().prompt(message, model=get_default_model())
         return summary
     
     def answer(self, question, messages):
@@ -86,14 +105,14 @@ class Agent:
         answer_prompt_formatted = answer_prompt.replace("--question--", question)
         message.append({"role": "developer", "content": answer_prompt_formatted})
         message.extend(self.parse_messages(messages))
-        for chunk in LLM().prompt_stream(message):
+        for chunk in LLM().prompt_stream(message, model=get_default_model()):
             yield chunk
 
     def compact(self, messages):
         message = []
         message.append({"role": "developer", "content": compact_prompt})
         message.extend(self.parse_messages(messages))
-        summary = LLM().prompt(message)
+        summary = LLM().prompt(message, model=get_default_model())
 
         messages.clear()
         messages.append({"role": "user", "content": summary})

@@ -4,13 +4,15 @@ import json
 import os
 import requests
 from pathlib import Path
-from .llm import LLM
+from getpass import getpass
+from .llm import LLM, get_default_model
 from rich.markdown import Markdown
 
 class TokenCounter:
-    def __init__(self, model="gpt-4o"):
+    def __init__(self, model: str = None):
+        model_name = model or get_default_model()
         try:
-            self.encoding = tiktoken.encoding_for_model(model)
+            self.encoding = tiktoken.encoding_for_model(model_name)
         except KeyError:
             self.encoding = tiktoken.get_encoding("o200k_base")
     
@@ -80,7 +82,10 @@ def get_timeout_message(elapsed_time):
 
 def show_help(console):
     console.print("\n[bright_cyan]Available Commands:[/bright_cyan]")
-    console.print("  [white]/key API_KEY[/white]              Set up your API key")
+    console.print("  [white]/setup[/white]              Run first-time setup wizard for API keys")
+    console.print("  [white]/key API_KEY[/white]         Set your Rallies API key (backward compatible)")
+    console.print("  [white]/key openai API_KEY[/white]  Set your OpenAI API key")
+    console.print("  [white]/key rallies API_KEY[/white] Set your Rallies API key")
     console.print("  [white]/feed[/white]               Show recent high-scoring questions from the community")
     console.print("  [white]/clear[/white]              Clear conversation history and free up context")
     console.print("  [white]/compact[/white]            Clear conversation history but keep a summary in context.")
@@ -151,38 +156,139 @@ def save_config(config):
     try:
         with open(config_file, 'w') as f:
             json.dump(config, f)
+        try:
+            # Restrict permissions to user read/write only
+            os.chmod(config_file, 0o600)
+        except Exception:
+            # Best effort; ignore if platform does not support
+            pass
         return True
     except IOError:
         return False
 
 
-def get_api_key():
-    """Get the stored API key"""
+def get_rallies_api_key():
+    """Get the stored Rallies API key (backward compatible with older 'api_key')."""
     config = load_config()
-    return config.get("api_key")
+    return config.get("rallies_api_key") or config.get("api_key")
 
 
-def set_api_key(api_key):
-    """Set and save the API key"""
+def set_rallies_api_key(api_key: str) -> bool:
+    """Set and save the Rallies API key."""
     config = load_config()
+    config["rallies_api_key"] = api_key
+    # Keep old key name for backward compatibility
     config["api_key"] = api_key
     return save_config(config)
 
 
+def get_openai_api_key() -> str:
+    """Resolve OpenAI API key from env or config."""
+    # Environment variable takes precedence
+    env_key = os.getenv("OPENAI_API_KEY")
+    if env_key:
+        return env_key
+    config = load_config()
+    return config.get("openai_api_key")
+
+
+def set_openai_api_key(api_key: str) -> bool:
+    """Persist OpenAI API key in config."""
+    config = load_config()
+    config["openai_api_key"] = api_key
+    saved = save_config(config)
+    if saved:
+        # Make available in current process
+        os.environ["OPENAI_API_KEY"] = api_key
+    return saved
+
+
+# Backward-compatible functions
+def get_api_key():
+    return get_rallies_api_key()
+
+def set_api_key(api_key):
+    return set_rallies_api_key(api_key)
+
+
 def handle_key_command(prompt, agent, console):
-    """Handle the /key command"""
-    parts = prompt.strip().split(None, 1)
+    """Handle the /key command
+
+    Supported forms:
+      /key API_KEY                 -> sets Rallies API key (backward compatible)
+      /key rallies API_KEY         -> sets Rallies API key
+      /key openai API_KEY          -> sets OpenAI API key
+    """
+    parts = prompt.strip().split()
     if len(parts) < 2:
-        console.print("[red]Usage: /key API_KEY[/red]")
+        console.print("[red]Usage: /key [openai|rallies] API_KEY[/red]")
         return True
-    
-    api_key = parts[1]
-    if set_api_key(api_key):
-        # Update the current agent's API key immediately
-        agent.api_key = api_key
-        console.print("[green]API key saved and activated.[/green]")
+
+    if len(parts) == 2:
+        # Backward compatible: set Rallies key
+        api_key = parts[1]
+        if set_rallies_api_key(api_key):
+            agent.api_key = api_key
+            console.print("[green]Rallies API key saved and activated.[/green]")
+        else:
+            console.print("[red]Failed to save Rallies API key.[/red]")
+        return True
+
+    provider = parts[1].lower()
+    api_key = parts[2] if len(parts) > 2 else None
+    if not api_key:
+        console.print("[red]Usage: /key [openai|rallies] API_KEY[/red]")
+        return True
+
+    if provider == "openai":
+        if set_openai_api_key(api_key):
+            console.print("[green]OpenAI API key saved and activated for this session.[/green]")
+        else:
+            console.print("[red]Failed to save OpenAI API key.[/red]")
+    elif provider == "rallies":
+        if set_rallies_api_key(api_key):
+            agent.api_key = api_key
+            console.print("[green]Rallies API key saved and activated.[/green]")
+        else:
+            console.print("[red]Failed to save Rallies API key.[/red]")
     else:
-        console.print("[red]Failed to save API key.[/red]")
+        console.print("[red]Unknown provider. Use 'openai' or 'rallies'.[/red]")
+    return True
+
+
+def handle_setup_command(console):
+    """Interactive setup wizard for first-time users."""
+    console.print("\n[bright_cyan]Setup Wizard[/bright_cyan]")
+    console.print("We'll configure your API keys. Press Enter to skip a field.")
+    try:
+        # OpenAI key
+        existing_openai = get_openai_api_key()
+        if existing_openai:
+            console.print("[dim]OpenAI key already configured.[/dim]")
+        else:
+            openai_key = getpass("OpenAI API key: ")
+            if openai_key.strip():
+                if set_openai_api_key(openai_key.strip()):
+                    console.print("[green]✓ OpenAI key saved.[/green]")
+                else:
+                    console.print("[red]Failed to save OpenAI key.[/red]")
+
+        # Rallies key (optional)
+        existing_rallies = get_rallies_api_key()
+        if existing_rallies:
+            console.print("[dim]Rallies key already configured (optional).[/dim]")
+        else:
+            rallies_key = getpass("Rallies API key (optional): ")
+            if rallies_key.strip():
+                if set_rallies_api_key(rallies_key.strip()):
+                    console.print("[green]✓ Rallies key saved.[/green]")
+                else:
+                    console.print("[red]Failed to save Rallies key.[/red]")
+
+        console.print()
+        console.print("[green]Setup complete. You can start asking questions![/green]")
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Setup cancelled by user.[/yellow]")
     return True
 
 
@@ -258,6 +364,9 @@ def handle_feed_command(console):
 def handle_command(prompt, conversation, agent, console):
     if prompt.strip() == "/help":
         return handle_help_command(console)
+    
+    if prompt.strip() == "/setup":
+        return handle_setup_command(console)
     
     if prompt.strip() == "/feed":
         return handle_feed_command(console)
